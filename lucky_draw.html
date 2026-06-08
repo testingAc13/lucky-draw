@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lucky Draw</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0d0d0f; --surface:#17171a; --s2:#1e1e23; --s3:#252530;
+  --border:rgba(255,255,255,0.08); --accent:#f0c040; --accent2:#e87c3e;
+  --text:#f0ede8; --muted:#7a7880;
+  --pa:#a78bfa; --pb:#34d399; --pc:#60a5fa; --pd:#f87171;
+}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;min-height:100%;-webkit-tap-highlight-color:transparent;}
+body{padding:1.4rem 1rem 5rem;}
+
+/* TABS */
+.tabs{display:flex;gap:6px;margin-bottom:1.3rem;}
+.tab{flex:1;padding:.55rem 0;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:10px;border:1px solid var(--border);background:var(--s2);color:var(--muted);transition:all .15s;-webkit-appearance:none;}
+.tab.active{background:var(--accent);color:#0d0d0f;border-color:var(--accent);}
+
+/* PAGES */
+.page{display:none;} .page.active{display:block;}
+
+/* HEADER */
+.hdr{text-align:center;margin-bottom:1.4rem;}
+.hdr h1{font-size:1.6rem;font-weight:800;letter-spacing:3px;color:var(--accent);text-transform:uppercase;}
+.hdr p{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:2px;text-transform:uppercase;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1rem;}
+.card-title{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:.8rem;}
+
+/* BUTTONS */
+.btns{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;}
+button{flex:1;padding:.8rem 0;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:12px;border:1px solid var(--border);background:var(--s2);color:var(--text);-webkit-appearance:none;touch-action:manipulation;transition:opacity .1s;min-width:70px;}
+button:active{opacity:.7;}
+button:disabled{opacity:.3;cursor:not-allowed;}
+.btn-accent{background:var(--accent);color:#0d0d0f;border-color:var(--accent);font-size:15px;}
+.btn-green{background:#0f3d2e;color:var(--pb);border-color:#1a6b4a;}
+.btn-red{background:#3d1f1f;color:var(--pd);border-color:#7a3030;}
+.btn-purple{background:#2d1f5e;color:var(--pa);border-color:#4a2fa0;}
+
+/* PRIZE BADGES */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-A{background:#3b2f6b;color:var(--pa);}
+.badge-B{background:#0f3d2e;color:var(--pb);}
+.badge-C{background:#1a3050;color:var(--pc);}
+.badge-D{background:#3d1f1f;color:var(--pd);}
+.badge-none{background:var(--s3);color:var(--muted);}
+
+/* PRIZE CONFIG */
+.prize-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.prize-row label{font-size:13px;font-weight:700;width:20px;}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dot-A{background:var(--pa);} .dot-B{background:var(--pb);} .dot-C{background:var(--pc);} .dot-D{background:var(--pd);}
+input[type=number],input[type=text],select{background:var(--s2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;padding:.42rem .6rem;-webkit-appearance:none;width:100%;}
+input[type=number]{width:60px;flex-shrink:0;}
+.prize-row input[type=text]{flex:1;}
+
+/* STATS ROW */
+.stats{display:flex;gap:8px;margin-bottom:1rem;}
+.stat{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.6rem .4rem;text-align:center;}
+.stat-label{font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;}
+.stat-val{font-size:20px;font-weight:700;color:var(--text);}
+
+/* DRAW DISPLAY */
+.display-box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem 1rem 1.2rem;text-align:center;margin-bottom:1rem;}
+.big-num{font-size:90px;font-weight:800;line-height:1;color:var(--accent);min-height:96px;display:flex;align-items:center;justify-content:center;letter-spacing:-3px;}
+@media(max-width:400px){.big-num{font-size:72px;min-height:78px;}}
+.big-num.idle{color:#2e2e35;} .big-num.rolling{color:var(--accent2);} .big-num.done{color:var(--accent);}
+.draw-winner{font-size:14px;font-weight:600;color:var(--text);margin-top:.5rem;min-height:20px;}
+.draw-dept{font-size:11px;color:var(--muted);margin-top:2px;min-height:16px;}
+
+/* REVEAL ANIMATION */
+@keyframes revealCard {
+  0%   { opacity:0; transform:scale(0.6) translateY(30px); }
+  60%  { transform:scale(1.08) translateY(-4px); }
+  100% { opacity:1; transform:scale(1) translateY(0); }
+}
+@keyframes revealPrizeBanner {
+  0%   { opacity:0; transform:translateY(-18px); }
+  100% { opacity:1; transform:translateY(0); }
+}
+@keyframes prizeAEntrance {
+  0%   { opacity:0; transform:scale(0.5) rotate(-6deg); }
+  50%  { transform:scale(1.15) rotate(2deg); }
+  75%  { transform:scale(0.96) rotate(-1deg); }
+  100% { opacity:1; transform:scale(1) rotate(0deg); }
+}
+@keyframes shimmer {
+  0%,100% { box-shadow: 0 0 8px #f0c04088, 0 0 0px #f0c04000; }
+  50%      { box-shadow: 0 0 24px #f0c040cc, 0 0 40px #f0c04044; }
+}
+@keyframes starPop {
+  0%   { opacity:0; transform:scale(0) rotate(0deg); }
+  60%  { opacity:1; transform:scale(1.3) rotate(20deg); }
+  100% { opacity:1; transform:scale(1) rotate(0deg); }
+}
+.reveal-card { animation: revealCard 0.45s cubic-bezier(.22,.68,0,1.4) forwards; opacity:0; }
+.reveal-card-A {
+  animation: prizeAEntrance 0.6s cubic-bezier(.22,.68,0,1.2) forwards, shimmer 1.5s ease-in-out 0.6s 4;
+  opacity:0;
+}
+.reveal-banner { animation: revealPrizeBanner 0.35s ease forwards; }
+#revealStage { min-height:80px; display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+#revealStage .prize-section-label {
+  font-size:10px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted); margin: 1rem 0 .5rem; padding-top:.5rem;
+  border-top:1px solid var(--border);
+}
+#revealStage .prize-section-label:first-child { border-top:none; margin-top:0; }
+
+/* CHIP GRID */
+.chip-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--s2);color:var(--muted);}
+.chip.latest{background:var(--accent);color:#0d0d0f;border-color:var(--accent);}
+.chip.done{color:var(--text);}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:480px;}
+th{background:var(--s2);color:var(--muted);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:.5rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.editable{background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;padding:3px 5px;width:100%;min-width:70px;transition:border .15s;}
+.editable:focus{border-color:var(--accent);background:var(--s2);outline:none;}
+.sent-btn{padding:3px 8px;font-size:10px;font-weight:700;border-radius:6px;border:1px solid var(--border);background:var(--s2);color:var(--muted);cursor:pointer;white-space:nowrap;-webkit-appearance:none;}
+.sent-btn.sent{background:#0f3d2e;color:var(--pb);border-color:#1a6b4a;}
+
+/* PARTICIPANT LIST */
+.p-list{max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;}
+.p-item{display:flex;align-items:center;gap:8px;padding:.5rem .7rem;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;}
+.p-item:last-child{border-bottom:none;}
+.p-num{width:22px;height:22px;border-radius:50%;background:var(--s3);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.p-name{flex:1;color:var(--text);}
+.p-dept{color:var(--muted);font-size:11px;}
+
+/* FILE DROP */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:1.5rem;text-align:center;cursor:pointer;transition:border .15s;margin-bottom:.8rem;}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);}
+.drop-zone p{font-size:13px;color:var(--muted);margin-top:.4rem;}
+.drop-zone .icon{font-size:2rem;}
+
+/* COL MAP */
+.col-map{display:flex;flex-direction:column;gap:8px;margin-bottom:.8rem;}
+.col-map-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+.col-map-row span{width:90px;color:var(--muted);flex-shrink:0;}
+
+/* INFO BOX */
+.info{background:var(--s2);border-radius:10px;padding:.7rem .9rem;font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:.8rem;}
+.info b{color:var(--text);}
+
+/* OVERLAY */
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.dialog{background:#1e1e23;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:1.5rem 1.4rem 1.2rem;width:90%;max-width:340px;text-align:center;}
+.dialog h3{font-size:15px;font-weight:700;margin-bottom:.5rem;color:var(--text);}
+.dialog p{font-size:13px;color:var(--muted);margin-bottom:1.2rem;line-height:1.5;}
+.dialog-btns{display:flex;gap:10px;}
+.dialog-btns button{flex:1;padding:.75rem 0;font-size:13px;}
+#confirmYes{background:#c0392b;color:#fff;border-color:#c0392b;}
+
+/* WINNER OVERLAY */
+#winnerOverlay .dialog{max-width:360px;}
+.winner-card{background:var(--s3);border-radius:12px;padding:1rem;margin-bottom:1rem;text-align:left;}
+.winner-card .wc-label{font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;}
+.winner-card .wc-val{font-size:14px;font-weight:600;color:var(--text);}
+.winner-input{margin-bottom:.7rem;}
+.winner-input label{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;display:block;margin-bottom:.3rem;}
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPage('import')">&#128101; Users</button>
+  <button class="tab" onclick="showPage('prizes')">&#127942; Prizes</button>
+  <button class="tab" onclick="showDrawPage()">&#127381; Draw</button>
+  <button class="tab" onclick="showPage('records')">&#128196; Records</button>
+  <button class="tab" onclick="showPage('history')">&#128337; History</button>
+</div>
+
+<!-- ===== IMPORT ===== -->
+<div id="page-import" class="page active">
+  <div class="hdr"><h1>&#128101; Users</h1><p>From MS Forms / Excel / CSV</p></div>
+
+  <div class="info">
+    Export your MS Forms responses as <b>Excel</b>, then upload here. Or upload any Excel/CSV with participant names and departments.
+  </div>
+
+  <div class="card">
+    <div class="card-title">Upload File</div>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">&#128196;</div>
+      <p>Tap to select Excel or CSV file</p>
+      <p style="font-size:11px;margin-top:4px;">.xlsx / .xls / .csv supported</p>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(this)">
+
+    <div id="colMapWrap" style="display:none;visibility:hidden;height:0;overflow:hidden;">
+      <div class="card-title" style="margin-bottom:.5rem;">Map Columns</div>
+      <div class="col-map">
+        <div class="col-map-row"><span>Name column:</span><select id="colName" onchange="previewParticipants()"></select></div>
+        <div class="col-map-row"><span>Department:</span><select id="colDept" onchange="previewParticipants()"></select></div>
+      </div>
+      <div class="btns"><button class="btn-green" onclick="confirmImport()">&#10003; Import Participants</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Or add manually</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="manualName" placeholder="Full Name" style="flex:2;">
+      <input type="text" id="manualDept" placeholder="Department" style="flex:1;">
+    </div>
+    <div class="btns" style="margin-bottom:0;"><button class="btn-green" onclick="addManual()">+ Add Person</button></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Or paste from Excel</div>
+    <div class="info" style="margin-bottom:.7rem;font-size:11px;">
+      Copy cells from Excel (select Name + Department columns), then paste below.<br>
+      First row can be a header — it will be skipped automatically.
+    </div>
+    <textarea id="pasteArea" placeholder="Paste Excel data here (Ctrl+V / Cmd+V)&#10;&#10;Example:&#10;Name&#9;Department&#10;Ahmad Razif&#9;Finance&#10;Nurul Hana&#9;HR" style="width:100%;height:130px;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:12px;padding:.6rem .8rem;resize:vertical;line-height:1.6;" oninput="previewPaste()"></textarea>
+    <div id="pastePreview" style="font-size:11px;color:var(--muted);margin:.4rem 0;min-height:16px;"></div>
+    <div class="btns" style="margin-bottom:0;">
+      <button class="btn-green" onclick="importPaste()">+ Import Pasted Data</button>
+      <button onclick="document.getElementById('pasteArea').value='';document.getElementById('pastePreview').textContent='';" style="flex:none;padding:.8rem .9rem;">&#10005;</button>
+    </div>
+  </div>
+
+  <div id="participantCard" style="display:none" class="card">
+    <div class="card-title" id="participantCount">0 participants loaded</div>
+    <div class="p-list" id="participantList"></div>
+    <div class="btns" style="margin-top:.8rem;margin-bottom:0;">
+      <button onclick="showPage('prizes')" class="btn-accent">Next: Setup Prizes &#8594;</button>
+      <button class="btn-red" onclick="resetParticipants()">&#8635; Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PRIZES ===== -->
+<div id="page-prizes" class="page">
+  <div class="hdr"><h1>&#127942; Prize Setup</h1><p>Add as many tiers as you need</p></div>
+  <div class="card">
+    <div class="card-title">Prize Tiers</div>
+    <div id="prizeTierList"></div>
+    <div class="btns" style="margin-top:.6rem;margin-bottom:.6rem;">
+      <button class="btn-green" onclick="addPrizeTier()">+ Add Prize</button>
+      <button class="btn-purple" onclick="document.getElementById('prizeFileInput').click()">&#8679; Import File</button>
+      <button class="btn-red" onclick="resetPrizes()">&#8635; Reset</button>
+      <input type="file" id="prizeFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handlePrizeFile(this)">
+    </div>
+    <div class="info" style="margin-bottom:.6rem;font-size:11px;">Import format: Excel/CSV with a <b>Prize</b> column. Each row = one prize.</div>
+    <div class="info" id="queueInfo" style="margin-bottom:0;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Or paste from Excel</div>
+    <div class="info" style="margin-bottom:.7rem;font-size:11px;">
+      Copy a column of prize names from Excel, then paste below. Each row = one prize.
+    </div>
+    <textarea id="prizePasteArea" placeholder="Paste prize names here&#10;&#10;Example:&#10;Grand Prize&#10;iPhone 16 Pro&#10;Cash Voucher RM500&#10;Hamper Set" style="width:100%;height:120px;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:12px;padding:.6rem .8rem;resize:vertical;line-height:1.6;" oninput="previewPrizePaste()"></textarea>
+    <div id="prizePastePreview" style="font-size:11px;color:var(--muted);margin:.4rem 0;min-height:16px;"></div>
+    <div class="btns" style="margin-bottom:0;">
+      <button class="btn-green" onclick="importPrizePaste()">+ Import Pasted Prizes</button>
+      <button onclick="document.getElementById('prizePasteArea').value='';document.getElementById('prizePastePreview').textContent='';" style="flex:none;padding:.8rem .9rem;">&#10005;</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Draw Mode</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="drawMode" value="auto" checked onchange="updateModeUI()"> <span><b>Auto Draw All</b> &mdash; instantly assign all prizes at once</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;">
+        <input type="radio" name="drawMode" value="manual" onchange="updateModeUI()"> <span><b>One by One</b> &mdash; draw each prize manually with animation</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="btns"><button class="btn-accent" onclick="applyPrizesAndGo()">&#10003; Apply &amp; Go to Draw &#8594;</button></div>
+</div>
+
+<!-- ===== DRAW ===== -->
+<div id="page-draw" class="page">
+  <div class="hdr"><h1>&#10022; Lucky Draw</h1><p id="drawSubtitle">Ready</p></div>
+  <div id="drawWarning" style="display:none;background:#3d2a0a;border:1px solid #a06010;border-radius:12px;padding:.8rem 1rem;margin-bottom:1rem;font-size:13px;color:#f0c040;line-height:1.6;">
+    <b>&#9888; Not ready to draw yet:</b>
+    <div id="drawWarningMsg" style="margin-top:.3rem;font-size:12px;color:#d4a840;"></div>
+    <div style="display:flex;gap:8px;margin-top:.7rem;">
+      <button onclick="showPage('import')" style="flex:1;padding:.5rem 0;font-size:12px;background:#5a3a0a;color:#f0c040;border-color:#a06010;border-radius:8px;">Go to Import</button>
+      <button onclick="showPage('prizes')" style="flex:1;padding:.5rem 0;font-size:12px;background:#5a3a0a;color:#f0c040;border-color:#a06010;border-radius:8px;">Go to Prizes</button>
+    </div>
+  </div>
+
+  <!-- AUTO MODE -->
+  <div id="autoDrawSection">
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Participants</div><div class="stat-val" id="totalPpl">0</div></div>
+      <div class="stat"><div class="stat-label">Prizes</div><div class="stat-val" id="totalPrizes">0</div></div>
+      <div class="stat"><div class="stat-label">Assigned</div><div class="stat-val" id="assignedCount">0</div></div>
+    </div>
+    <div class="btns">
+      <button class="btn-accent" id="autoDrawBtn" onclick="autoDrawAll()">&#127881; Draw All Prizes!</button>
+      <button id="skipRevealBtn" onclick="skipReveal()" style="display:none;background:#1a2a3a;color:var(--pc);border-color:#1a4a7a;">&#9654;&#9654; Skip</button>
+      <button onclick="document.getElementById('confirmYes').onclick=doReset;document.querySelector('#overlay .dialog h3').textContent='Reset Draw?';document.querySelector('#overlay .dialog p').innerHTML='Clear draw results only.<br><span style=\'font-size:11px;color:var(--muted);\'>Participants &amp; prizes kept.</span>';showReset()" style="background:#1a2a1a;color:var(--pb);border-color:#1a6b4a;">&#8635; Draw</button>
+      <button onclick="showResetAll()" style="background:#2a1a1a;color:var(--pd);border-color:#7a3030;">&#8635; Setup</button>
+    </div>
+    <!-- Reveal stage (shown during dramatic reveal) -->
+    <div id="revealStageWrap" style="display:none;text-align:center;" class="card">
+      <div id="revealPrizeBanner" style="text-align:center;margin-bottom:.8rem;min-height:32px;"></div>
+      <div id="revealStage"></div>
+      <div style="text-align:center;margin-top:.8rem;">
+        <div id="revealStatus" style="font-size:12px;color:var(--muted);min-height:18px;"></div>
+      </div>
+    </div>
+
+    <div id="autoResultPreview" style="display:none;" class="card">
+      <div class="card-title" style="font-size:18px;font-weight:800;color:var(--accent);letter-spacing:2px;">&#127881; Bongo!</div>
+      <div id="autoChips" class="chip-grid"></div>
+      <div class="btns" style="margin-top:.8rem;margin-bottom:0;">
+        <button class="btn-green" onclick="showPage('records')">View Full Records &#8594;</button>
+      </div>
+    </div>
+
+    <!-- Participants list with pagination -->
+    <div class="card" id="drawParticipantCard" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;">
+        <div class="card-title" style="margin-bottom:0;" id="drawPplTitle">Participants</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="pplPageChange(-1)" id="pplPrev" style="flex:none;width:28px;height:28px;min-width:unset;padding:0;font-size:14px;border-radius:8px;">&#8249;</button>
+          <span id="pplPageLabel" style="font-size:11px;color:var(--muted);line-height:28px;white-space:nowrap;"></span>
+          <button onclick="pplPageChange(1)" id="pplNext" style="flex:none;width:28px;height:28px;min-width:unset;padding:0;font-size:14px;border-radius:8px;">&#8250;</button>
+        </div>
+      </div>
+      <div id="drawPplList" class="p-list"></div>
+    </div>
+
+    <!-- Prizes list -->
+    <div class="card" id="drawPrizesCard" style="display:none;">
+      <div class="card-title">Prizes</div>
+      <div id="drawPrizesList"></div>
+    </div>
+  </div>
+
+  <!-- MANUAL MODE -->
+  <div id="manualDrawSection" style="display:none;">
+    <div class="display-box">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:.3rem;">Drawing for prize</div>
+      <div id="currentPrizeBadge"><span class="badge badge-none">—</span></div>
+      <div class="big-num idle" id="display">?</div>
+      <div class="draw-winner" id="drawWinner"></div>
+      <div class="draw-dept" id="drawDept"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Drawn</div><div class="stat-val" id="drawnCount">0</div></div>
+      <div class="stat"><div class="stat-label">Remaining</div><div class="stat-val" id="remainCount">0</div></div>
+      <div class="stat"><div class="stat-label">Prizes Left</div><div class="stat-val" id="prizesLeft">0</div></div>
+    </div>
+    <div class="btns">
+      <button class="btn-accent" id="drawBtn" onclick="drawOne()">&#10022; Draw!</button>
+      <button onclick="document.getElementById('confirmYes').onclick=doReset;document.querySelector('#overlay .dialog h3').textContent='Reset Draw?';document.querySelector('#overlay .dialog p').innerHTML='Clear draw results only.<br><span style=\'font-size:11px;color:var(--muted);\'>Participants &amp; prizes kept.</span>';showReset()" style="background:#1a2a1a;color:var(--pb);border-color:#1a6b4a;">&#8635; Draw</button>
+      <button onclick="showResetAll()" style="background:#2a1a1a;color:var(--pd);border-color:#7a3030;">&#8635; Setup</button>
+    </div>
+    <div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem;">History</div>
+    <div class="chip-grid" id="histGrid"></div>
+
+    <!-- Participants list with pagination (manual) -->
+    <div class="card" style="margin-top:1rem;" id="manualParticipantCard" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;">
+        <div class="card-title" style="margin-bottom:0;" id="manualPplTitle">Participants</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="pplPageChange(-1)" id="pplPrevM" style="flex:none;width:28px;height:28px;min-width:unset;padding:0;font-size:14px;border-radius:8px;">&#8249;</button>
+          <span id="pplPageLabelM" style="font-size:11px;color:var(--muted);line-height:28px;white-space:nowrap;"></span>
+          <button onclick="pplPageChange(1)" id="pplNextM" style="flex:none;width:28px;height:28px;min-width:unset;padding:0;font-size:14px;border-radius:8px;">&#8250;</button>
+        </div>
+      </div>
+      <div id="manualPplList" class="p-list"></div>
+    </div>
+
+    <!-- Prizes list (manual) -->
+    <div class="card" id="manualPrizesCard" style="margin-top:0;">
+      <div class="card-title">Prizes</div>
+      <div id="manualPrizesList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RECORDS ===== -->
+<div id="page-records" class="page">
+  <div class="hdr"><h1>&#128196; Records</h1><p>Draw results</p></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">
+    <button class="btn-green" style="flex:2;padding:.8rem 0;" onclick="exportExcel()">&#8595; Export Excel</button>
+    <button class="btn-accent" style="flex:2;padding:.8rem 0;font-size:13px;" onclick="saveResult()">&#128190; Save to History</button>
+    <button onclick="showResetAll()" style="flex:1;padding:.8rem 0;font-size:13px;font-weight:700;border-radius:12px;background:transparent;color:var(--muted);border-color:rgba(255,255,255,0.1);">reset all</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Name &#128274;</th><th>Dept &#128274;</th><th>Prize</th><th>Prize Name</th></tr></thead>
+      <tbody id="recordBody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem;">No winners yet.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div id="page-history" class="page">
+  <div class="hdr"><h1>&#128337; History</h1><p>Saved draw results</p></div>
+  <div id="historyList"><div style="font-size:13px;color:var(--muted);text-align:center;padding:2rem 0;">No saved results yet.<br><span style="font-size:11px;">Go to Records and tap &ldquo;Save Result&rdquo;.</span></div></div>
+</div>
+
+<!-- CONFIRM RESET -->
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h3>Reset Draw?</h3>
+    <p>All draw results will be cleared.<br><span style="font-size:11px;color:var(--muted);">Participants and prizes will be kept.</span></p>
+    <div class="dialog-btns">
+      <button onclick="hideReset()">Cancel</button>
+      <button id="confirmYes" onclick="doReset()">Yes, Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- WINNER DETAIL OVERLAY (manual draw) -->
+<div class="overlay" id="winnerOverlay">
+  <div class="dialog">
+    <h3>&#127881; Winner!</h3>
+    <div class="winner-card">
+      <div class="wc-label">Number Drawn</div><div class="wc-val" id="wo-num"></div>
+      <div class="wc-label" style="margin-top:.6rem;">Prize</div><div class="wc-val" id="wo-prize"></div>
+      <div class="wc-label" style="margin-top:.6rem;">Winner</div><div class="wc-val" id="wo-name"></div>
+      <div class="wc-label" style="margin-top:.4rem;">Department</div><div class="wc-val" id="wo-dept"></div>
+    </div>
+    <div class="dialog-btns">
+      <button onclick="closeWinner()">Close</button>
+      <button class="btn-green" onclick="closeWinner();showPage('records');">View Records</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+var participants = [];   // [{name, dept}]
+var prizeQueue   = [];   // ['A','A','B',...]
+var prizeNames   = {A:'Prize A',B:'Prize B',C:'Prize C',D:'Prize D'};
+var records      = [];   // [{name,dept,prize,prizeName,drawNum,sent}]
+var pool         = [];   // indices into participants not yet drawn (manual mode)
+var rolling      = false;
+var drawMode     = 'auto';
+var rawData      = [];   // raw rows from file
+var rawHeaders   = [];
+
+// ===== PAGES =====
+var pageIds = ['import','prizes','draw','records','history'];
+
+function showDrawPage() {
+  showPage('draw');
+  var msgs = [];
+  if(participants.length===0) msgs.push('&#128229; No participants imported yet.');
+  if(prizeQueue.length===0)   msgs.push('&#127942; No prizes configured yet.');
+  var warn = document.getElementById('drawWarning');
+  var wMsg = document.getElementById('drawWarningMsg');
+  if(msgs.length>0){
+    wMsg.innerHTML = msgs.join('<br>');
+    warn.style.display='block';
+  } else {
+    warn.style.display='none';
+  }
+}
+
+function showPage(name) {
+  for (var i=0;i<pageIds.length;i++) {
+    document.getElementById('page-'+pageIds[i]).className = 'page'+(pageIds[i]===name?' active':'');
+    document.getElementsByClassName('tab')[i].className = 'tab'+(pageIds[i]===name?' active':'');
+  }
+  if (name==='records') renderRecords();
+  if (name==='draw') refreshDrawPage();
+}
+
+// ===== FILE IMPORT =====
+function handleFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var data = new Uint8Array(e.target.result);
+    var wb = XLSX.read(data, {type:'array'});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    rawData = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    if (rawData.length < 2) { alert('File seems empty or has only 1 row.'); return; }
+    rawHeaders = rawData[0].map(function(h,i){ return h || 'Column '+(i+1); });
+    // auto-detect name and dept columns
+    var nameCol = 0, deptCol = -1;
+    rawHeaders.forEach(function(h, i) {
+      var hl = h.toLowerCase();
+      if (hl.indexOf('name')>=0) nameCol=i;
+      if (hl.indexOf('dept')>=0||hl.indexOf('department')>=0||hl.indexOf('team')>=0) deptCol=i;
+    });
+    // auto import immediately
+    var list = [];
+    for (var r=1;r<rawData.length;r++) {
+      var row = rawData[r];
+      var name = (row[nameCol]||'').toString().trim();
+      if (!name) continue;
+      list.push({name:name, dept: deptCol>=0?(row[deptCol]||'').toString().trim():''});
+    }
+    if (list.length===0){ alert('No names found. Make sure your file has a "Name" column.'); return; }
+    list.forEach(function(p){ participants.push(p); });
+    showParticipants(participants, true);
+    resetPool();
+    document.getElementById('dropZone').querySelector('p').textContent = file.name + ' — '+list.length+' participants loaded';
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function previewParticipants() {
+  var ni = parseInt(document.getElementById('colName').value);
+  var di = document.getElementById('colDept').value;
+  var list = [];
+  for (var r=1;r<rawData.length;r++) {
+    var row = rawData[r];
+    var name = (row[ni]||'').toString().trim();
+    if (!name) continue;
+    list.push({name:name, dept: di!==''?(row[parseInt(di)]||'').toString().trim():''});
+  }
+  showParticipants(list, false);
+}
+
+function confirmImport() {
+  var ni = parseInt(document.getElementById('colName').value);
+  var di = document.getElementById('colDept').value;
+  var list = [];
+  for (var r=1;r<rawData.length;r++) {
+    var row = rawData[r];
+    var name = (row[ni]||'').toString().trim();
+    if (!name) continue;
+    list.push({name:name, dept: di!==''?(row[parseInt(di)]||'').toString().trim():''});
+  }
+  if (list.length===0){alert('No names found. Please check the Name column.');return;}
+  list.forEach(function(p){ participants.push(p); });
+  showParticipants(participants, true);
+  resetPool();
+  document.getElementById('colMapWrap').style.display='none';
+}
+
+function previewPaste() {
+  var raw = document.getElementById('pasteArea').value.trim();
+  if(!raw){ document.getElementById('pastePreview').textContent=''; return; }
+  var result = parsePasteData(raw);
+  document.getElementById('pastePreview').textContent = result.length + ' participant' + (result.length!==1?'s':'') + ' detected';
+}
+
+function parsePasteData(raw) {
+  var lines = raw.split(/\r?\n/).filter(function(l){ return l.trim(); });
+  if(lines.length===0) return [];
+  var list = [];
+  // detect if first row is header (contains "name" keyword)
+  var firstCells = lines[0].split(/\t/);
+  var firstIsHeader = firstCells.some(function(c){ return /name|dept|department|team/i.test(c.trim()); });
+  var startRow = firstIsHeader ? 1 : 0;
+  for(var i=startRow; i<lines.length; i++){
+    var cells = lines[i].split(/\t/);
+    var name = (cells[0]||'').trim();
+    var dept = (cells[1]||'').trim();
+    if(!name) continue;
+    list.push({name:name, dept:dept});
+  }
+  return list;
+}
+
+function importPaste() {
+  var raw = document.getElementById('pasteArea').value.trim();
+  if(!raw){ alert('Nothing pasted yet.'); return; }
+  var list = parsePasteData(raw);
+  if(list.length===0){ alert('No names found. Make sure your data has names in the first column.'); return; }
+  list.forEach(function(p){ participants.push(p); });
+  showParticipants(participants, true);
+  resetPool();
+  document.getElementById('pasteArea').value='';
+  document.getElementById('pastePreview').textContent='';
+  alert('\u2705 '+list.length+' participant'+(list.length!==1?'s':'')+' added!');
+}
+
+function addManual() {
+  var n = document.getElementById('manualName').value.trim();
+  var d = document.getElementById('manualDept').value.trim();
+  if (!n){alert('Please enter a name.');return;}
+  participants.push({name:n,dept:d});
+  document.getElementById('manualName').value='';
+  document.getElementById('manualDept').value='';
+  showParticipants(participants, true);
+  resetPool();
+}
+
+function showParticipants(list, save) {
+  var card = document.getElementById('participantCard');
+  var plist = document.getElementById('participantList');
+  var cnt   = document.getElementById('participantCount');
+  card.style.display = 'block';
+  cnt.textContent = list.length + ' participant' + (list.length!==1?'s':'') + ' loaded';
+  var html='';
+  for(var i=0;i<list.length;i++){
+    html+='<div class="p-item">'
+      +'<div class="p-num">'+(i+1)+'</div>'
+      +'<div class="p-name">'+esc(list[i].name)+'</div>'
+      +'<div class="p-dept">'+esc(list[i].dept||'')+'</div>'
+      +'<button onclick="removeParticipant('+i+')" style="flex:none;width:26px;height:26px;min-width:unset;padding:0;border-radius:50%;font-size:14px;background:#3d1f1f;color:var(--pd);border-color:#7a3030;line-height:1;">&times;</button>'
+      +'</div>';
+  }
+  plist.innerHTML = html;
+}
+
+function removeParticipant(i) {
+  participants.splice(i, 1);
+  resetPool();
+  showParticipants(participants, true);
+}
+
+function resetPool() {
+  pool = [];
+  for(var i=0;i<participants.length;i++) pool.push(i);
+}
+
+// ===== PRIZES =====
+var prizeTiers = []; // [{letter, qty}]
+var TIER_COLORS = ['#a78bfa','#34d399','#60a5fa','#f87171','#fbbf24','#f472b6','#38bdf8','#4ade80','#fb923c','#e879f9'];
+
+function letterFromIndex(i) {
+  // A,B,C,...Z, then AA,AB,...
+  var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  if(i < 26) return letters[i];
+  return letters[Math.floor(i/26)-1] + letters[i%26];
+}
+
+function tierColor(i) { return TIER_COLORS[i % TIER_COLORS.length]; }
+
+function addPrizeTier() {
+  prizeTiers.push({name:''});
+  renderPrizeTiers();
+  updateQueue();
+}
+
+function removePrizeTier(i) {
+  prizeTiers.splice(i,1);
+  renderPrizeTiers();
+  updateQueue();
+}
+
+function renderPrizeTiers() {
+  var list = document.getElementById('prizeTierList');
+  if(prizeTiers.length===0){ list.innerHTML='<div style="font-size:12px;color:var(--muted);padding:.4rem 0;">No prizes yet. Tap &ldquo;Add Prize Tier&rdquo; below.</div>'; return; }
+  var html='';
+  for(var i=0;i<prizeTiers.length;i++){
+    var letter = letterFromIndex(i);
+    var col = tierColor(i);
+    html+='<div draggable="true" data-idx="'+i+'" ondragestart="dragStart(event,'+i+')" ondragover="dragOver(event)" ondrop="dragDrop(event,'+i+')" ondragend="dragEnd()" '
+      +'ontouchstart="touchStart(event,'+i+')" ontouchmove="touchMove(event)" ontouchend="touchEnd(event,'+i+')" '
+      +'style="display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--s2);border-radius:10px;padding:6px 8px;border:1px solid var(--border);transition:opacity .15s;cursor:grab;" id="ptrow-'+i+'">'
+      +'<span style="color:var(--muted);font-size:16px;cursor:grab;padding:0 2px;touch-action:none;">&#8597;</span>'
+      +'<div class="dot" style="background:'+col+';flex-shrink:0;"></div>'
+      +'<label style="color:'+col+';width:24px;font-size:13px;font-weight:700;flex-shrink:0;">'+letter+'</label>'
+      +'<input type="text" placeholder="Prize name..." value="'+esc(prizeTiers[i].name||'')+'" style="flex:1;font-size:13px;background:transparent;border-color:transparent;" oninput="prizeTiers['+i+'].name=this.value;updateQueue();">'
+      +'<button onclick="removePrizeTier('+i+')" style="flex:none;width:26px;height:26px;min-width:unset;padding:0;border-radius:50%;font-size:14px;background:#3d1f1f;color:var(--pd);border-color:#7a3030;line-height:1;">&times;</button>'
+      +'</div>';
+  }
+  list.innerHTML=html;
+  // fix draggable attr (HTML string workaround)
+  var rows = list.querySelectorAll('[data-idx]');
+  for(var i=0;i<rows.length;i++){
+    (function(el,idx){
+      el.addEventListener('dragstart',function(e){dragStart(e,idx);});
+      el.addEventListener('dragover', function(e){dragOver(e);});
+      el.addEventListener('drop',     function(e){dragDrop(e,idx);});
+      el.addEventListener('dragend',  function(){dragEnd();});
+      el.addEventListener('touchstart',function(e){touchStart(e,idx);},{passive:true});
+      el.addEventListener('touchmove', function(e){touchMove(e);},{passive:false});
+      el.addEventListener('touchend',  function(e){touchEnd(e,idx);});
+    })(rows[i], parseInt(rows[i].getAttribute('data-idx')));
+  }
+}
+
+// ---- Drag & Drop (mouse) ----
+var dragSrcIdx = -1;
+function dragStart(e, idx) {
+  dragSrcIdx = idx;
+  setTimeout(function(){ var el=document.getElementById('ptrow-'+idx); if(el) el.style.opacity='0.4'; },0);
+  if(e.dataTransfer) e.dataTransfer.effectAllowed='move';
+}
+function dragOver(e) { e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; }
+function dragDrop(e, targetIdx) {
+  e.preventDefault();
+  if(dragSrcIdx === -1 || dragSrcIdx === targetIdx) return;
+  var moved = prizeTiers.splice(dragSrcIdx,1)[0];
+  prizeTiers.splice(targetIdx,0,moved);
+  dragSrcIdx=-1;
+  renderPrizeTiers(); updateQueue();
+}
+function dragEnd() {
+  dragSrcIdx=-1;
+  var rows=document.querySelectorAll('[data-idx]');
+  for(var i=0;i<rows.length;i++) rows[i].style.opacity='1';
+}
+
+// ---- Touch drag (mobile) ----
+var touchSrcIdx=-1, touchClone=null, touchOffX=0, touchOffY=0;
+function touchStart(e,idx){
+  touchSrcIdx=idx;
+  var el=e.currentTarget;
+  var rect=el.getBoundingClientRect();
+  touchOffX=e.touches[0].clientX-rect.left;
+  touchOffY=e.touches[0].clientY-rect.top;
+  touchClone=el.cloneNode(true);
+  touchClone.style.cssText='position:fixed;z-index:999;width:'+rect.width+'px;opacity:0.85;pointer-events:none;border-radius:10px;background:var(--s3);left:'+(e.touches[0].clientX-touchOffX)+'px;top:'+(e.touches[0].clientY-touchOffY)+'px;';
+  document.body.appendChild(touchClone);
+  el.style.opacity='0.3';
+}
+function touchMove(e){
+  e.preventDefault();
+  if(!touchClone) return;
+  touchClone.style.left=(e.touches[0].clientX-touchOffX)+'px';
+  touchClone.style.top=(e.touches[0].clientY-touchOffY)+'px';
+}
+function touchEnd(e,idx){
+  if(touchClone){ document.body.removeChild(touchClone); touchClone=null; }
+  var el=document.getElementById('ptrow-'+touchSrcIdx);
+  if(el) el.style.opacity='1';
+  // find target by touch position
+  var tx=e.changedTouches[0].clientX, ty=e.changedTouches[0].clientY;
+  var rows=document.querySelectorAll('[data-idx]');
+  var targetIdx=-1;
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i].getBoundingClientRect();
+    if(tx>=r.left&&tx<=r.right&&ty>=r.top&&ty<=r.bottom){
+      targetIdx=parseInt(rows[i].getAttribute('data-idx')); break;
+    }
+  }
+  if(targetIdx!==-1 && targetIdx!==touchSrcIdx){
+    var moved=prizeTiers.splice(touchSrcIdx,1)[0];
+    prizeTiers.splice(targetIdx,0,moved);
+    renderPrizeTiers(); updateQueue();
+  }
+  touchSrcIdx=-1;
+}
+
+function updateQueue() {
+  var total=prizeTiers.length;
+  var summary='';
+  for(var i=0;i<prizeTiers.length;i++){
+    var letter=letterFromIndex(i);
+    var col=tierColor(i);
+    var nm=prizeTiers[i].name?' '+esc(prizeTiers[i].name):'Prize '+letter;
+    summary+='<span style="color:'+col+'">'+letter+'</span> <span style="color:var(--muted);font-size:11px;">'+nm+'</span> &nbsp;';
+  }
+  document.getElementById('queueInfo').innerHTML = prizeTiers.length===0
+    ? 'Add prize tiers above.'
+    : 'Total prizes: <b>'+total+'</b> &nbsp;|&nbsp; '+summary;
+}
+
+function updateModeUI() {
+  var radios = document.getElementsByName('drawMode');
+  for(var i=0;i<radios.length;i++) if(radios[i].checked) drawMode=radios[i].value;
+}
+
+function buildPrizeQueue() {
+  prizeQueue=[];
+  prizeNames={};
+  for(var i=0;i<prizeTiers.length;i++){
+    var letter=letterFromIndex(i);
+    prizeNames[letter]=prizeTiers[i].name||('Prize '+letter);
+    prizeQueue.push(letter);
+  }
+}
+
+function applyPrizesAndGo() {
+  updateModeUI();
+  buildPrizeQueue();
+  updateQueue();
+  if(participants.length===0){alert('\u26a0\ufe0f No participants loaded!\n\nPlease go to the Import tab first and upload your participant list.');return;}
+  if(prizeQueue.length===0){alert('\u26a0\ufe0f No prizes configured!\n\nPlease add at least 1 prize before drawing.');return;}
+  showPage('draw');
+}
+
+// ===== DRAW PAGE REFRESH =====
+function refreshDrawPage() {
+  var auto = document.getElementById('autoDrawSection');
+  var man  = document.getElementById('manualDrawSection');
+  document.getElementById('totalPpl').textContent=participants.length;
+  document.getElementById('totalPrizes').textContent=prizeQueue.length;
+  document.getElementById('assignedCount').textContent=records.length;
+  if (drawMode==='auto') { auto.style.display='block'; man.style.display='none'; }
+  else                   { auto.style.display='none';  man.style.display='block'; refreshManual(); }
+  document.getElementById('drawSubtitle').textContent =
+    participants.length + ' participants · ' + prizeQueue.length + ' prizes';
+  renderDrawLists();
+}
+
+// ===== AUTO DRAW ALL =====
+function autoDrawAll() {
+  if(participants.length===0){showDrawPage();return;}
+  if(prizeQueue.length===0){alert('No prizes configured. Go to Prizes tab first.');return;}
+  var needed = prizeQueue.length - records.length;
+  if(needed<=0){alert('All prizes already assigned!');return;}
+  // shuffle and assign all results immediately
+  var available = [];
+  var usedIdx = {};
+  for(var i=0;i<records.length;i++) usedIdx[records[i]._pIdx]=true;
+  for(var i=0;i<participants.length;i++) if(!usedIdx[i]) available.push(i);
+  shuffle(available);
+  var drawCount = Math.min(needed, available.length);
+  for(var i=0;i<drawCount;i++){
+    var pIdx = available[i];
+    var prize = prizeQueue[records.length];
+    records.push({
+      _pIdx: pIdx,
+      name: participants[pIdx].name,
+      dept: participants[pIdx].dept,
+      prize: prize,
+      prizeName: prizeNames[prize],
+      drawNum: records.length+1,
+      sent: false
+    });
+  }
+  document.getElementById('assignedCount').textContent=records.length;
+  document.getElementById('autoDrawBtn').disabled=true;
+  document.getElementById('autoDrawBtn').textContent='Revealing...';
+  startDramaticReveal();
+}
+
+var skipRevealFlag = false;
+
+function skipReveal() {
+  skipRevealFlag = true;
+}
+
+function startDramaticReveal() {
+  skipRevealFlag = false;
+  document.getElementById('skipRevealBtn').style.display = '';
+  // group records by prize, reversed order (last prize letter first = lowest tier first)
+  var groups = {}; // letter -> [records]
+  for(var i=0;i<records.length;i++){
+    var r=records[i];
+    if(!groups[r.prize]) groups[r.prize]=[];
+    groups[r.prize].push(r);
+  }
+  // sort prize letters descending (Z first, A last = big prize last)
+  var letters = Object.keys(groups).sort(function(a,b){
+    return b.localeCompare(a);
+  });
+
+  document.getElementById('revealStageWrap').style.display='block';
+  document.getElementById('revealStage').innerHTML='';
+  document.getElementById('revealPrizeBanner').innerHTML='';
+  document.getElementById('revealStatus').textContent='';
+
+  var letterIdx=0;
+  var cardIdx=0;
+  var LETTER_PAUSE=1800;  // pause between prize groups
+  var CARD_DELAY=520;     // delay between each winner card
+
+  function revealNextGroup(){
+    if(skipRevealFlag){
+      document.getElementById('revealStageWrap').style.display='none';
+      showFinalSummary();
+      return;
+    }
+    if(letterIdx>=letters.length){
+      // all done — show final summary
+      setTimeout(function(){
+        document.getElementById('revealStageWrap').style.display='none';
+        showFinalSummary();
+      }, 1200);
+      return;
+    }
+    var letter=letters[letterIdx];
+    var col=prizeColor(letter);
+    var pName=prizeNames[letter]||('Prize '+letter);
+    var grp=groups[letter];
+
+    // tierProgress: 0 = lowest prize, 1 = Prize A (grand prize)
+    var tierProgress = letterIdx / Math.max(1, letters.length - 1);
+
+    // show prize banner
+    var banner=document.getElementById('revealPrizeBanner');
+    var stage=document.getElementById('revealStage');
+    var status=document.getElementById('revealStatus');
+    stage.innerHTML='';
+    banner.className='reveal-banner';
+    banner.style.cssText='text-align:center;margin-bottom:.8rem;';
+    var bannerFS = Math.round(14 + tierProgress * 14);
+    var bannerPad = tierProgress > 0.6 ? '.6rem 1.8rem' : '.4rem 1.2rem';
+    var prizeABanner = tierProgress===1;
+    var bannerPrefix = prizeABanner ? '&#127881; ' : '';
+    var bannerSuffix = prizeABanner ? ' &#127881;' : '';
+    banner.innerHTML='<div style="display:inline-block;padding:'+bannerPad+';border-radius:24px;background:'+col+'22;border:2px solid '+col+(tierProgress>0.6?'cc':'66')+';box-shadow:0 0 '+(tierProgress>0.5?'16px':'4px')+' '+col+'44;">'
+      +'<div style="font-size:'+bannerFS+'px;font-weight:800;color:'+col+';">'+bannerPrefix+prizeBadge(letter)+' '+esc(pName)+bannerSuffix+'</div>'
+      +'</div>';
+    if(prizeABanner){
+      // slow down card reveal for Prize A for more drama
+      CARD_DELAY = 900;
+    }
+
+    cardIdx=0;
+    function revealNextCard(){
+      if(skipRevealFlag){
+        document.getElementById('revealStageWrap').style.display='none';
+        showFinalSummary();
+        return;
+      }
+      if(cardIdx>=grp.length){
+        // done with this group, pause then next
+        letterIdx++;
+        status.textContent='';
+        CARD_DELAY = 520; // reset delay for next group
+        setTimeout(revealNextGroup, tierProgress===1 ? 2400 : LETTER_PAUSE);
+        return;
+      }
+      var r=grp[cardIdx];
+      var shortName=r.name; // full name
+      var card=document.createElement('div');
+      card.className = (tierProgress===1) ? 'reveal-card-A' : 'reveal-card';
+      // tierProgress already defined in outer scope
+      var cardW   = Math.round(72  + tierProgress * 52);  // 72px → 124px
+      var cardP   = Math.round(8   + tierProgress * 10);  // 8px  → 18px
+      var nameFS  = Math.round(12  + tierProgress * 10);  // 12px → 22px
+      var deptFS  = Math.round(9   + tierProgress * 4);   // 9px  → 13px
+      var radius  = Math.round(12  + tierProgress * 8);   // 12px → 20px
+      var bdrW    = tierProgress > 0.6 ? 3 : 2;
+      card.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--s2);border:'+bdrW+'px solid '+col+';border-radius:'+radius+'px;padding:'+cardP+'px '+(cardP+4)+'px;min-width:'+cardW+'px;width:auto;max-width:200px;animation-delay:0s;box-shadow:0 0 '+(tierProgress>0.5?'12px':'4px')+' '+col+(tierProgress>0.5?'55':'22')+';';
+      // build card children via DOM to avoid emoji/innerHTML rendering bugs
+      var spanBadge=document.createElement('span');
+      spanBadge.style.cssText='font-size:'+(9+Math.round(tierProgress*4))+'px;font-weight:700;color:'+col+';';
+      spanBadge.innerHTML=prizeBadge(letter);
+      var spanName=document.createElement('span');
+      spanName.style.cssText='font-size:'+nameFS+'px;font-weight:700;color:var(--text);text-align:center;word-break:break-word;line-height:1.2;';
+      spanName.textContent=r.name;
+      var spanDept=document.createElement('span');
+      spanDept.style.cssText='font-size:'+deptFS+'px;color:var(--muted);text-align:center;';
+      spanDept.textContent=r.dept||'';
+      card.appendChild(spanBadge);
+      card.appendChild(spanName);
+      card.appendChild(spanDept);
+      stage.appendChild(card);
+      status.textContent=(cardIdx+1)+' / '+grp.length;
+      cardIdx++;
+      setTimeout(revealNextCard, CARD_DELAY);
+    }
+    revealNextCard();
+  }
+
+  setTimeout(revealNextGroup, 400);
+}
+
+function showFinalSummary(){
+  document.getElementById('skipRevealBtn').style.display='none';
+  var container=document.getElementById('autoChips');
+  container.innerHTML='';
+  container.style.cssText='display:flex;flex-wrap:wrap;justify-content:center;gap:8px;';
+  for(var i=0;i<records.length;i++){
+    var r=records[i];
+    var col=prizeColor(r.prize);
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--s2);border:1px solid '+col+';border-radius:10px;padding:6px 10px;min-width:80px;max-width:150px;';
+    var s1=document.createElement('span');
+    s1.style.cssText='font-size:10px;font-weight:700;color:'+col+';';
+    s1.innerHTML=prizeBadge(r.prize);
+    var s2=document.createElement('span');
+    s2.style.cssText='font-size:12px;font-weight:600;color:var(--text);text-align:center;word-break:break-word;';
+    s2.textContent=r.name;
+    div.appendChild(s1);
+    div.appendChild(s2);
+    container.appendChild(div);
+  }
+  document.getElementById('autoResultPreview').style.display='block';
+  document.getElementById('autoDrawBtn').textContent='&#10003; Done!';
+}
+
+// ===== MANUAL DRAW =====
+function refreshManual() {
+  var drawn = records.length;
+  var remaining = pool.length - drawn;
+  var prizesLeft = prizeQueue.length - drawn;
+  document.getElementById('drawnCount').textContent=drawn;
+  document.getElementById('remainCount').textContent=Math.max(0,remaining);
+  document.getElementById('prizesLeft').textContent=Math.max(0,prizesLeft);
+  if(prizesLeft<=0){
+    document.getElementById('drawBtn').disabled=true;
+    document.getElementById('display').textContent='Done';
+    document.getElementById('display').className='big-num idle';
+  }
+  // update current prize badge
+  var nextPrize = records.length < prizeQueue.length ? prizeQueue[records.length] : null;
+  document.getElementById('currentPrizeBadge').innerHTML = nextPrize
+    ? '<span class="badge badge-'+nextPrize+'">'+nextPrize+' &mdash; '+prizeNames[nextPrize]+'</span>'
+    : '<span class="badge badge-none">All prizes drawn</span>';
+  // chips
+  var g=document.getElementById('histGrid');
+  if(records.length===0){g.innerHTML='<div style="font-size:12px;color:var(--muted);">No draws yet.</div>';return;}
+  var html='';
+  for(var i=records.length-1;i>=0;i--){
+    var r=records[i];
+    html+='<div class="chip '+(i===records.length-1?'latest':'done')+'" title="'+esc(r.name)+'">'+r.drawNum+'</div>';
+  }
+  g.innerHTML=html;
+}
+
+function drawOne() {
+  if(rolling) return;
+  var prizesLeft = prizeQueue.length - records.length;
+  if(prizesLeft<=0){alert('All prizes have been drawn!');return;}
+  // find available pool entries
+  var usedIdx={};
+  for(var i=0;i<records.length;i++) usedIdx[records[i]._pIdx]=true;
+  var available=[];
+  for(var i=0;i<participants.length;i++) if(!usedIdx[i]) available.push(i);
+  if(available.length===0){alert('No more participants available!');return;}
+  rolling=true;
+  var btn=document.getElementById('drawBtn');
+  var disp=document.getElementById('display');
+  btn.disabled=true;
+  disp.className='big-num rolling';
+  document.getElementById('drawWinner').textContent='';
+  document.getElementById('drawDept').textContent='';
+  var count=0,total=22;
+  var iv=setInterval(function(){
+    disp.textContent=Math.floor(Math.random()*participants.length)+1;
+    count++;
+    if(count>=total){
+      clearInterval(iv);
+      var rIdx=Math.floor(Math.random()*available.length);
+      var pIdx=available[rIdx];
+      var prize=prizeQueue[records.length];
+      var rec={_pIdx:pIdx,name:participants[pIdx].name,dept:participants[pIdx].dept,
+               prize:prize,prizeName:prizeNames[prize],drawNum:records.length+1,sent:false};
+      records.push(rec);
+      disp.textContent=rec.drawNum;
+      disp.className='big-num done';
+      document.getElementById('drawWinner').textContent=rec.name;
+      document.getElementById('drawDept').textContent=rec.dept||'';
+      rolling=false;
+      refreshManual();
+      btn.disabled=false;
+      // show winner overlay
+      document.getElementById('wo-num').textContent=rec.drawNum;
+      document.getElementById('wo-prize').innerHTML='<span class="badge badge-'+rec.prize+'">'+rec.prize+' &mdash; '+rec.prizeName+'</span>';
+      document.getElementById('wo-name').textContent=rec.name;
+      document.getElementById('wo-dept').textContent=rec.dept||'—';
+      document.getElementById('winnerOverlay').className='overlay show';
+      autoBackupExcel();
+    }
+  },60);
+}
+
+function closeWinner(){ document.getElementById('winnerOverlay').className='overlay'; }
+
+// ===== RECORDS =====
+function renderRecords(){
+  var tbody=document.getElementById('recordBody');
+  if(records.length===0){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem;">No winners yet.</td></tr>';
+    return;
+  }
+  var html='';
+  for(var i=0;i<records.length;i++){
+    var r=records[i];
+    html+='<tr>';
+    html+='<td style="color:var(--muted);font-size:10px;">'+(i+1)+'</td>';
+    html+='<td style="font-weight:600;">'+esc(r.name)+'</td>';
+    html+='<td style="color:var(--muted);font-size:12px;">'+esc(r.dept||'—')+'</td>';
+    html+='<td>'+prizeBadge(r.prize)+'</td>';
+    html+='<td style="color:var(--muted);font-size:11px;">'+esc(r.prizeName)+'</td>';
+    html+='</tr>';
+  }
+  tbody.innerHTML=html;
+}
+
+// ===== EXPORT =====
+function buildExcelWb(recs, label){
+  var rows=[['#','Winner Name','Department','Prize','Prize Name']];
+  for(var i=0;i<recs.length;i++){
+    var r=recs[i];
+    rows.push([i+1,r.name,r.dept||'',r.prize,r.prizeName]);
+  }
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:4},{wch:22},{wch:18},{wch:7},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws,label||'Lucky Draw Results');
+  return wb;
+}
+function exportExcel(){
+  if(records.length===0){alert('No records to export.');return;}
+  XLSX.writeFile(buildExcelWb(records,'Results'),'lucky_draw_results.xlsx');
+}
+
+
+// ===== SAVE RESULT & HISTORY =====
+var drawHistory = [];
+
+function saveResult(){
+  if(records.length===0){alert('No results to save yet.');return;}
+  var now = new Date();
+  var label = 'Draw ' + (drawHistory.length+1) + ' — ' +
+    now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+
+    ' '+now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes();
+  var snapshot = {label:label, time:now.getTime(), recs: JSON.parse(JSON.stringify(records))};
+  drawHistory.push(snapshot);
+  renderHistory();
+  alert('\u2705 Result saved to History!');
+}
+
+function renderHistory(){
+  var el = document.getElementById('historyList');
+  if(drawHistory.length===0){
+    el.innerHTML='<div style="font-size:13px;color:var(--muted);text-align:center;padding:2rem 0;">No saved results yet.<br><span style="font-size:11px;">Go to Records and tap &ldquo;Save Result&rdquo;.</span></div>';
+    return;
+  }
+  // build DOM nodes directly — no innerHTML for buttons, avoids all closure/scope issues
+  el.innerHTML='';
+  for(var i=drawHistory.length-1;i>=0;i--){
+    var h=drawHistory[i];
+    var card=document.createElement('div');
+    card.className='card';
+    card.style.marginBottom='1rem';
+
+    // header row
+    var hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;';
+    var info=document.createElement('div');
+    info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--text);">'+esc(h.label)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">'+h.recs.length+' winner'+(h.recs.length!==1?'s':'')+'</div>';
+    var btnWrap=document.createElement('div');
+    btnWrap.style.cssText='display:flex;gap:6px;flex-shrink:0;';
+    var btn=document.createElement('button');
+    btn.className='btn-green';
+    btn.style.cssText='flex:none;padding:.4rem .8rem;font-size:11px;min-width:unset;border-radius:8px;';
+    btn.innerHTML='&#8595; Export';
+    (function(idx){
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var snap=drawHistory[idx];
+        if(!snap){ alert('Save not found.'); return; }
+        if(typeof XLSX==='undefined'){ alert('Excel library not loaded yet. Please wait a moment and try again.'); return; }
+        var wb=XLSX.utils.book_new();
+        var rows=[['#','Winner Name','Department','Prize','Prize Name']];
+        for(var k=0;k<snap.recs.length;k++){
+          var rx=snap.recs[k];
+          rows.push([k+1, rx.name, rx.dept||'', rx.prize, rx.prizeName]);
+        }
+        var ws=XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols']=[{wch:4},{wch:22},{wch:18},{wch:7},{wch:22}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Results');
+        XLSX.writeFile(wb, 'lucky_draw_save_'+(idx+1)+'.xlsx');
+      });
+      var btnDel=document.createElement('button');
+      btnDel.className='btn-red';
+      btnDel.style.cssText='flex:none;padding:.4rem .8rem;font-size:11px;min-width:unset;border-radius:8px;';
+      btnDel.innerHTML='&#10005;';
+      btnDel.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        drawHistory.splice(idx,1);
+        renderHistory();
+      });
+      btnWrap.appendChild(btn);
+      btnWrap.appendChild(btnDel);
+    })(i);
+    hdr.appendChild(info);
+    hdr.appendChild(btnWrap);
+    card.appendChild(hdr);
+
+    // mini table
+    var wrap=document.createElement('div');
+    wrap.className='tbl-wrap';
+    var thtml='<table style="min-width:320px;"><thead><tr><th>#</th><th>Name</th><th>Dept</th><th>Prize</th><th>Prize Name</th></tr></thead><tbody>';
+    for(var j=0;j<h.recs.length;j++){
+      var r=h.recs[j];
+      thtml+='<tr>'
+        +'<td style="color:var(--muted);font-size:10px;">'+(j+1)+'</td>'
+        +'<td style="font-weight:600;font-size:12px;">'+esc(r.name)+'</td>'
+        +'<td style="color:var(--muted);font-size:11px;">'+esc(r.dept||'—')+'</td>'
+        +'<td>'+prizeBadge(r.prize)+'</td>'
+        +'<td style="color:var(--muted);font-size:11px;">'+esc(r.prizeName)+'</td>'
+        +'</tr>';
+    }
+    thtml+='</tbody></table>';
+    wrap.innerHTML=thtml;
+    card.appendChild(wrap);
+    el.appendChild(card);
+  }
+}
+
+function resetPrizes(){
+  prizeTiers=[];
+  renderPrizeTiers();
+  updateQueue();
+}
+
+function resetParticipants(){
+  participants=[]; pool=[];
+  document.getElementById('participantCard').style.display='none';
+  document.getElementById('participantList').innerHTML='';
+  document.getElementById('colMapWrap').style.display='none';
+  document.getElementById('dropZone').querySelector('p').textContent='Tap to select Excel or CSV file';
+  document.getElementById('fileInput').value='';
+  rawData=[]; rawHeaders=[];
+}
+
+// ===== RESET =====
+function showReset(){ document.getElementById('overlay').className='overlay show'; }
+function showResetAll(){
+  document.getElementById('confirmYes').onclick=doResetAll;
+  document.getElementById('overlay').className='overlay show';
+  document.querySelector('#overlay .dialog h3').textContent='Reset Everything?';
+  document.querySelector('#overlay .dialog p').innerHTML='All draws, participants and prizes will be cleared.';
+}
+function doResetAll(){
+  hideReset();
+  participants=[]; prizeQueue=[]; records=[]; pool=[]; rolling=false; rawData=[]; rawHeaders=[]; prizeTiers=[];
+  document.getElementById('participantCard').style.display='none';
+  document.getElementById('participantList').innerHTML='';
+  document.getElementById('colMapWrap').style.display='none';
+  document.getElementById('dropZone').querySelector('p').textContent='Tap to select Excel or CSV file';
+  document.getElementById('fileInput').value='';
+  document.getElementById('autoResultPreview').style.display='none';
+  document.getElementById('autoDrawBtn').disabled=false;
+  document.getElementById('autoDrawBtn').innerHTML='&#127881; Draw All Prizes!';
+  renderPrizeTiers(); updateQueue();
+  document.getElementById('display').textContent='?';
+  document.getElementById('display').className='big-num idle';
+  showPage('import');
+}
+function hideReset(){ document.getElementById('overlay').className='overlay'; }
+function doReset(){
+  hideReset();
+  // only reset draw results — keep participants and prizes intact
+  records=[]; rolling=false;
+  resetPool();
+  buildPrizeQueue();
+  document.getElementById('autoResultPreview').style.display='none';
+  document.getElementById('autoDrawBtn').disabled=false;
+  document.getElementById('autoDrawBtn').innerHTML='&#127881; Draw All Prizes!';
+  document.getElementById('display').textContent='?';
+  document.getElementById('display').className='big-num idle';
+  document.getElementById('drawWinner').textContent='';
+  document.getElementById('drawDept').textContent='';
+  refreshDrawPage();
+}
+
+// ===== UTILS =====
+function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; } }
+function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function previewPrizePaste() {
+  var raw = document.getElementById('prizePasteArea').value.trim();
+  if(!raw){ document.getElementById('prizePastePreview').textContent=''; return; }
+  var lines = parsePrizePaste(raw);
+  document.getElementById('prizePastePreview').textContent = lines.length + ' prize' + (lines.length!==1?'s':'') + ' detected';
+}
+
+function parsePrizePaste(raw) {
+  var lines = raw.split(/\r?\n/).filter(function(l){ return l.trim(); });
+  // skip header if it looks like one (contains "prize" keyword)
+  if(lines.length>0 && /prize|name/i.test(lines[0].trim())) lines=lines.slice(1);
+  return lines.map(function(l){ return l.split(/\t/)[0].trim(); }).filter(Boolean);
+}
+
+function importPrizePaste() {
+  var raw = document.getElementById('prizePasteArea').value.trim();
+  if(!raw){ alert('Nothing pasted yet.'); return; }
+  var names = parsePrizePaste(raw);
+  if(names.length===0){ alert('No prize names found.'); return; }
+  names.forEach(function(n){ prizeTiers.push({name:n}); });
+  renderPrizeTiers();
+  updateQueue();
+  document.getElementById('prizePasteArea').value='';
+  document.getElementById('prizePastePreview').textContent='';
+  alert('\u2705 '+names.length+' prize'+(names.length!==1?'s':'')+' added!');
+}
+
+function handlePrizeFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var data = new Uint8Array(e.target.result);
+    var wb = XLSX.read(data, {type:'array'});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    if (rows.length < 2) { alert('File seems empty.'); return; }
+    // find "Prize" column (case-insensitive)
+    var headers = rows[0].map(function(h){ return (h||'').toString().toLowerCase().trim(); });
+    var prizeCol = headers.indexOf('prize');
+    if (prizeCol === -1) {
+      // fallback: just use first column
+      prizeCol = 0;
+    }
+    var imported = 0;
+    for (var r = 1; r < rows.length; r++) {
+      var val = (rows[r][prizeCol]||'').toString().trim();
+      if (!val) continue;
+      prizeTiers.push({name: val});
+      imported++;
+    }
+    renderPrizeTiers();
+    updateQueue();
+    input.value = '';
+    alert(imported + ' prize' + (imported!==1?'s':'') + ' imported!');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ===== DRAW PAGE PARTICIPANT & PRIZE LISTS =====
+var pplPage = 0;
+var PPL_PER_PAGE = 8;
+
+function renderDrawLists() {
+  var isAuto = drawMode === 'auto';
+  var pplListId   = isAuto ? 'drawPplList'   : 'manualPplList';
+  var pplTitleId  = isAuto ? 'drawPplTitle'  : 'manualPplTitle';
+  var pplLabelId  = isAuto ? 'pplPageLabel'  : 'pplPageLabelM';
+  var pplPrevId   = isAuto ? 'pplPrev'       : 'pplPrevM';
+  var pplNextId   = isAuto ? 'pplNext'       : 'pplNextM';
+  var pplCardId   = isAuto ? 'drawParticipantCard' : 'manualParticipantCard';
+  var prListId    = isAuto ? 'drawPrizesList' : 'manualPrizesList';
+  var prCardId    = isAuto ? 'drawPrizesCard' : 'manualPrizesCard';
+
+  // Participants
+  var card = document.getElementById(pplCardId);
+  if(card) card.style.display = participants.length ? 'block' : 'none';
+  var totalPages = Math.ceil(participants.length / PPL_PER_PAGE);
+  if(pplPage >= totalPages) pplPage = Math.max(0, totalPages-1);
+  var start = pplPage * PPL_PER_PAGE;
+  var end   = Math.min(start + PPL_PER_PAGE, participants.length);
+  var usedIdx = {};
+  for(var i=0;i<records.length;i++) usedIdx[records[i]._pIdx]=true;
+
+  var titleEl = document.getElementById(pplTitleId);
+  if(titleEl) titleEl.textContent = 'Participants ('+participants.length+')';
+
+  var html='';
+  for(var i=start;i<end;i++){
+    var won = usedIdx[i];
+    html+='<div class="p-item" style="'+(won?'opacity:.4;text-decoration:line-through;':'')+'">'
+      +'<div class="p-num">'+(i+1)+'</div>'
+      +'<div class="p-name">'+esc(participants[i].name)+'</div>'
+      +'<div class="p-dept">'+esc(participants[i].dept||'')+'</div>'
+      +(won?'<span style="font-size:10px;color:var(--pb);">&#10003;</span>':'')
+      +'</div>';
+  }
+  var pplEl = document.getElementById(pplListId);
+  if(pplEl) pplEl.innerHTML = html || '<div class="empty">No participants.</div>';
+
+  var labelEl = document.getElementById(pplLabelId);
+  if(labelEl) labelEl.textContent = totalPages>1 ? (pplPage+1)+'/'+totalPages : '';
+  var prevEl = document.getElementById(pplPrevId);
+  var nextEl = document.getElementById(pplNextId);
+  if(prevEl) prevEl.disabled = pplPage===0;
+  if(nextEl) nextEl.disabled = pplPage>=totalPages-1;
+
+  // Prizes
+  var prCard = document.getElementById(prCardId);
+  if(prCard) prCard.style.display = prizeQueue.length ? 'block' : 'none';
+  var prEl = document.getElementById(prListId);
+  if(!prEl) return;
+  var prHtml='';
+  for(var i=0;i<prizeQueue.length;i++){
+    var letter=prizeQueue[i];
+    var won2 = i < records.length;
+    var winner = won2 ? records[i] : null;
+    prHtml+='<div style="display:flex;align-items:center;gap:8px;padding:.4rem 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+      +prizeBadge(letter)
+      +'<span style="font-size:12px;color:var(--muted);flex:1;">'+esc(prizeNames[letter]||'')+'</span>'
+      +(won2
+        ?'<span style="font-size:11px;color:var(--pb);">&#10003; '+esc(winner.name)+'</span>'
+        :'<span style="font-size:10px;color:var(--muted);">Pending</span>')
+      +'</div>';
+  }
+  prEl.innerHTML = prHtml || '<div class="empty">No prizes configured.</div>';
+}
+
+function pplPageChange(dir){
+  var totalPages=Math.ceil(participants.length/PPL_PER_PAGE);
+  pplPage=Math.max(0,Math.min(totalPages-1,pplPage+dir));
+  renderDrawLists();
+}
+
+window.onload=function(){
+  prizeTiers=[];
+  renderPrizeTiers();
+  updateQueue();
+};
+
+function prizeColor(letter) {
+  var idx = 0;
+  if(letter && letter.length===1) idx = letter.charCodeAt(0)-65;
+  else if(letter && letter.length===2) idx = (letter.charCodeAt(0)-64)*26 + (letter.charCodeAt(1)-65);
+  return TIER_COLORS[idx % TIER_COLORS.length];
+}
+
+function prizeBadge(letter) {
+  var col = prizeColor(letter);
+  var icon = '';
+  if(letter==='A') icon='&#128081;&#128293;'; // crown + fire
+  else if(letter==='B') icon='&#129360;';     // silver medal
+  else if(letter==='C') icon='&#129361;';     // bronze medal
+  var label = icon ? icon+' '+esc(letter) : esc(letter);
+  return '<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:'+col+'22;color:'+col+';border:1px solid '+col+'55">'+label+'</span>';
+}
+</script>
+</body>
+</html>
